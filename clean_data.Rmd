@@ -1,0 +1,1671 @@
+---
+title: "Clean Data"
+output: html_document
+---
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+```{r, echo = FALSE, message = FALSE, warning = FALSE, error = FALSE}
+rm(list = ls())
+```
+
+```{r, echo = FALSE, message = FALSE, warning = FALSE}
+library(readr)
+library(dplyr)
+library(ggplot2)
+library(reshape2)
+library(nnet)
+library(devtools)
+library(countrycode)
+library(Amelia)
+library(expss)
+library(kableExtra)
+library(knitr)
+library(mlogit)
+library(MASS)
+library(foreign)
+library(stargazer)
+library(lmtest)
+library(arm)
+library(Hmisc)
+library(corrplot)
+library(AER)
+library(cowplot)
+library(PerformanceAnalytics)
+library(Zelig)
+library(car)
+library(lmtest)
+library(data.table)
+library(foreach)
+```
+
+#Botswana Household Cleaning
+```{r}
+#Clean Botswana Household, Identify Disabilities Correctly
+
+data <- read.csv("botswana_household.csv")
+
+```
+
+```{r}
+#Identify Disability
+disflag <- rep("NA", nrow(data))
+
+data <- cbind(data, disflag)
+
+for (i in c(which( colnames(data) == "See"):which( colnames(data) == "Communication"))) {
+  data$disflag <- ifelse(data$disflag == 1, 1, 
+                         ifelse(data[,i] %in% c("A LOT", "UNABLE"), 1, 0)
+  )
+}
+```
+
+```{r}
+#Sex Flag
+#1 if female, 0 if male
+sexflag <- rep("NA", nrow(data))
+
+data <- cbind(data,sexflag)
+
+data$sexflag <- ifelse(data$Sex == "Female", 1, 0)
+```
+
+```{r}
+#Physical Health Flag
+#1 if good or very good
+#0 if poor
+#2 if not very good
+#3 if unanswered or answered don't know
+
+physhealthflag <- rep("NA", nrow(data))
+
+data <- cbind(data, physhealthflag)
+
+setnames(data, old = "Q50_Q19", new = "sphyshealth")
+
+data$physhealthflag <- ifelse(data$sphyshealth %in% c("Good", "Very good"), 1, 
+       ifelse(data$sphyshealth %in% "Poor", 0,
+              ifelse(data$sphyshealth %in% "Not very good", 2, 3)))
+```
+
+```{r}
+#Mental Health Flag
+#1 if good or very good
+#0 if poor
+#2 if not very good
+#3 if unanswered or answered don't know
+
+menhealthflag <- rep("NA", nrow(data))
+
+data <- cbind(data, menhealthflag)
+
+setnames(data, old = "Q51_Q20", new = "smenhealth")
+
+data$menhealthflag <- ifelse(data$smenhealth %in% c("Good", "Very good"), 1, 
+       ifelse(data$smenhealth %in% "Poor", 0,
+              ifelse(data$smenhealth %in% "Not very good", 2, 3)))
+```
+
+```{r}
+#Total Health Flag
+#1 if both mental and physical health are good
+#0 if either mental or physical health are bad
+#2 if for fair; defined as no bad, no more than 1 good, and no more than 1 unanswered
+#3 if unanswered/don't know for both
+
+tothealthflag <- rep("NA", nrow(data))
+
+data <- cbind(data, tothealthflag)
+
+#Old Code to create a fair category
+#data$tothealthflag <- ifelse(data$menhealthflag %in% 0 | data$physhealthflag %in% 0, 0,
+#                             ifelse(data$menhealthflag %in% 1 & data$physhealthflag %in% 1, 1,
+#                                    ifelse(data$menhealthflag %in% 3 & data$physhealthflag %in% 3, 3, 2)))
+
+#New code, removal of fair category
+data$tothealthflag <- ifelse(data$menhealthflag %in% c(0,2) | data$physhealthflag %in% c(0,2), 0,
+                             ifelse(data$menhealthflag %in% 1 & data$physhealthflag %in% 1, 1,3))
+```
+
+```{r}
+#% Voted flag
+#Answer category of Sometimes counted as yes
+
+votedflag <- rep("NA", nrow(data))
+
+data <- cbind(data, votedflag)
+
+setnames(data, old = "Q42l_Q16h", new = "voted")
+
+data$votedflag <- ifelse(data$voted %in% c("Yes", 3), 1, 
+       ifelse(data$voted %in% c("No"), 0, 3))
+```
+
+```{r}
+#Resave file and create a csv for examination in excel
+write.table(data, file = "botswana_household2.csv", sep = ",", row.names = F)
+```
+
+```{r, error = FALSE, warning = FALSE, message = FALSE}
+rm(list = ls())
+```
+
+
+#Botswana Disability data
+```{r, error = FALSE}
+#Clean Botswana Disability, Identify Disabilities Correctly
+
+data <- read.csv("botswana_disabilities.csv")
+
+```
+
+```{r}
+#Identify Disability
+disflag <- rep("NA", nrow(data))
+
+data <- cbind(data, disflag)
+
+for (i in c(which( colnames(data) == "See"):which( colnames(data) == "Communication"))) {
+  data$disflag <- ifelse(data$disflag == 1, 1, 
+                         ifelse(data[,i] %in% c("A LOT", "UNABLE"), 1, 0)
+  )
+  
+}
+```
+
+```{r}
+#Sex Flag
+#1 if female, 0 if male
+sexflag <- rep("NA", nrow(data))
+
+data <- cbind(data,sexflag)
+
+data$sexflag <- ifelse(data$Sex == "Female", 1, 0)
+```
+
+```{r}
+#Physical Health Flag
+#1 if good or very good
+#0 if poor
+#2 if not very good
+#3 if unanswered or answered don't know
+
+physhealthflag <- rep("NA", nrow(data))
+
+data <- cbind(data, physhealthflag)
+
+setnames(data, old = "Q50_Q19", new = "sphyshealth")
+
+data$physhealthflag <- ifelse(data$sphyshealth %in% c("Good", "Very good"), 1, 
+       ifelse(data$sphyshealth %in% "Poor", 0,
+              ifelse(data$sphyshealth %in% "Not very good", 2, 3)))
+```
+
+```{r}
+#Mental Health Flag
+#1 if good or very good
+#0 if poor
+#2 if not very good
+#3 if unanswered or answered don't know
+
+menhealthflag <- rep("NA", nrow(data))
+
+data <- cbind(data, menhealthflag)
+
+setnames(data, old = "Q51_Q20", new = "smenhealth")
+
+data$menhealthflag <- ifelse(data$smenhealth %in% c("Good", "Very good"), 1, 
+       ifelse(data$smenhealth %in% "Poor", 0,
+              ifelse(data$smenhealth %in% "Not very good", 2, 3)))
+```
+
+```{r}
+#Total Health Flag
+#1 if both mental and physical health are good
+#0 if either mental or physical health are bad
+#2 if for fair; defined as no bad, no more than 1 good, and no more than 1 unanswered
+#3 if unanswered/don't know for both
+
+tothealthflag <- rep("NA", nrow(data))
+
+data <- cbind(data, tothealthflag)
+
+#Old Code to create a fair category
+#data$tothealthflag <- ifelse(data$menhealthflag %in% 0 | data$physhealthflag %in% 0, 0,
+#                             ifelse(data$menhealthflag %in% 1 & data$physhealthflag %in% 1, 1,
+#                                    ifelse(data$menhealthflag %in% 3 & data$physhealthflag %in% 3, 3, 2)))
+
+#New code, removal of fair category
+data$tothealthflag <- ifelse(data$menhealthflag %in% c(0,2) | data$physhealthflag %in% c(0,2), 0,
+                             ifelse(data$menhealthflag %in% 1 & data$physhealthflag %in% 1, 1,3))
+```
+
+```{r}
+#General Violence Flag
+#1 if yes
+#0 if no
+#3 if don't know or NA
+
+genvioflag <- rep("NA", nrow(data))
+
+data <- cbind(data, genvioflag)
+
+setnames(data, old = "Q8", new = "genvio")
+
+data$genvioflag <- ifelse(data$genvio %in% "Yes", 1, 
+       ifelse(data$genvio %in% "No", 0, 3))
+```
+
+```{r}
+#Family Violence Flag
+#1 if yes
+#0 if no
+#3 if don't know or NA
+
+famvioflag <- rep("NA", nrow(data))
+
+data <- cbind(data, famvioflag)
+
+setnames(data, old = "Q9", new = "famvio")
+
+data$famvioflag <- ifelse(data$famvio %in% "Yes", 1, 
+       ifelse(data$famvio %in% "No", 0, 3))
+```
+
+```{r}
+#Correct for yes to Family Violence but no to General violence
+
+data$genvioflag <- ifelse(data$famvioflag == 1, 1, data$genvioflag)
+
+```
+
+```{r}
+#Ever been institutionalized flag
+
+instflag <- rep("NA", nrow(data))
+
+data <- cbind(data, instflag)
+
+setnames(data, old = "Q12", new = "institutionalized")
+
+data$instflag <- ifelse(data$institutionalized %in% c("YES"), 1, 
+       ifelse(data$institutionalized %in% c("NO"), 0, 3))
+```
+
+```{r}
+#Accessible Toilet in Home Flag
+
+toiletflag <- rep("NA", nrow(data))
+
+data <- cbind(data, toiletflag)
+
+setnames(data, old = "Q30e", new = "toilet")
+
+data$toiletflag <- ifelse(data$toilet %in% c("Yes"), 1, 
+       ifelse(data$toilet %in% c("No"), 0, 3))
+```
+
+```{r}
+#Accessible Recreational facilities flag
+
+recflag <- rep("NA", nrow(data))
+
+data <- cbind(data, recflag)
+
+setnames(data, old = "Q31e", new = "rec")
+
+data$recflag <- ifelse(data$rec %in% c("Yes"), 1, 
+       ifelse(data$rec %in% c("No"), 0, 3))
+```
+
+```{r}
+#Needed and Received Welfare
+
+welflag <- rep("NA", nrow(data))
+
+data <- cbind(data, welflag)
+
+setnames(data, old = c("Q13g_a", "Q13g_c"), new = c("neededw","receivedw"))
+
+data$welflag <- ifelse(data[,"neededw"] %in% c("Yes") & data[,"receivedw"] %in% c("Yes"), 1, 
+       ifelse(data[,"neededw"] %in% c("Yes") & data[,"receivedw"] %in% c("No"), 0, 3))
+```
+
+```{r}
+#Resave as a new file
+
+write.table(data, file = "botswana_disabilities2.csv", sep = ",", row.names = F)
+```
+
+```{r, error = FALSE, warning = FALSE, message = FALSE}
+rm(list = ls())
+```
+
+#Nepal Master Cleaning
+```{r, error = FALSE, }
+##############
+#Before Loading Nepal, manually remove all commas , from csv file#
+#Before loading Nepal, clean out all "" from csv file#
+##############
+
+#Clean Nepal Household, Identify Disabilities Correctly
+data <- read.csv("nepal_household.csv")
+```
+
+```{r}
+#Identify Disability
+disflag <- rep("NA", nrow(data))
+
+data <- cbind(data, disflag)
+
+setnames(data, old = c("r9", "r10","r11","r12","r13","r14"), new = c("See", "Hear", "Walk", "Remembering", "Self_care","Communication"))
+
+for (i in c(which( colnames(data) == "See"):which( colnames(data) == "Communication"))) {
+  data$disflag <- ifelse(data$disflag == 1, 1, 
+                         ifelse(data[,i] %in% c(" A lot", " Unable"), 1, 0)
+  )
+}
+```
+
+```{r}
+#Sex Flag
+#1 if female, 0 if male
+sexflag <- rep("NA", nrow(data))
+
+data <- cbind(data,sexflag)
+
+setnames(data, old = "gender", new = "Sex")
+
+data$sexflag <- ifelse(data$Sex == " Female", 1, 0)
+```
+
+```{r}
+#Physical Health Flag
+#1 if good or very good
+#0 if poor
+#2 if not very good
+#3 if unanswered or answered don't know
+
+physhealthflag <- rep("NA", nrow(data))
+
+data <- cbind(data, physhealthflag)
+
+setnames(data, old = "q151", new = "sphyshealth")
+
+data$physhealthflag <- ifelse(data$sphyshealth %in% c(" Good", " Very good"), 1, 
+       ifelse(data$sphyshealth %in% " Poor", 0,
+              ifelse(data$sphyshealth %in% " Not very good", 2, 3)))
+```
+
+```{r}
+#Mental Health Flag
+#1 if good or very good
+#0 if poor
+#2 if not very good
+#3 if unanswered or answered don't know
+
+menhealthflag <- rep("NA", nrow(data))
+
+data <- cbind(data, menhealthflag)
+
+setnames(data, old = "q152", new = "smenhealth")
+
+data$menhealthflag <- ifelse(data$smenhealth %in% c(" Good", " Very good"), 1, 
+       ifelse(data$smenhealth %in% " Poor", 0,
+              ifelse(data$smenhealth %in% " Not very good", 2, 3)))
+```
+
+```{r}
+#Total Health Flag
+#1 if both mental and physical health are good
+#0 if either mental or physical health are bad
+#2 if for fair; defined as no bad, no more than 1 good, and no more than 1 unanswered
+#3 if unanswered/don't know for both
+
+tothealthflag <- rep("NA", nrow(data))
+
+data <- cbind(data, tothealthflag)
+
+#Old Code to create a fair category
+#data$tothealthflag <- ifelse(data$menhealthflag %in% 0 | data$physhealthflag %in% 0, 0,
+#                             ifelse(data$menhealthflag %in% 1 & data$physhealthflag %in% 1, 1,
+#                                    ifelse(data$menhealthflag %in% 3 & data$physhealthflag %in% 3, 3, 2)))
+
+#New code, removal of fair category
+data$tothealthflag <- ifelse(data$menhealthflag %in% c(0,2) | data$physhealthflag %in% c(0,2), 0,
+                             ifelse(data$menhealthflag %in% 1 & data$physhealthflag %in% 1, 1,3))
+```
+
+```{r}
+#General Violence Flag
+#1 if yes
+#0 if no
+#3 if don't know or NA
+
+genvioflag <- rep("NA", nrow(data))
+
+data <- cbind(data, genvioflag)
+
+setnames(data, old = "q108", new = "genvio")
+
+data$genvio <- trimws(data$genvio,"both")
+
+data$genvioflag <- ifelse(data$genvio %in% "Yes", 1, 
+       ifelse(data$genvio %in% "No", 0, 3))
+```
+
+```{r}
+#Family Violence Flag
+#1 if yes
+#0 if no
+#3 if don't know or NA
+
+famvioflag <- rep("NA", nrow(data))
+
+data <- cbind(data, famvioflag)
+
+setnames(data, old = "q109", new = "famvio")
+
+data$famvio <- trimws(data$famvio,"both")
+
+data$famvioflag <- ifelse(data$famvio %in% "Yes", 1, 
+       ifelse(data$famvio %in% "No", 0, 3))
+```
+
+```{r}
+#Correct for yes to Family Violence but no to General violence
+
+data$genvioflag <- ifelse(data$famvioflag == 1, 1, data$genvioflag)
+
+```
+
+```{r}
+#% Voted flag
+#Answer category of Sometimes counted as yes
+
+votedflag <- rep("NA", nrow(data))
+
+data <- cbind(data, votedflag)
+
+setnames(data, old = "q14312", new = "voted")
+
+data$voted <- trimws(data$voted, "both")
+
+data$votedflag <- ifelse(data$voted %in% c("Yes", 3), 1, 
+       ifelse(data$voted %in% c("No"), 0, 3))
+```
+
+```{r}
+#Ever been institutionalized flag
+
+instflag <- rep("NA", nrow(data))
+
+data <- cbind(data, instflag)
+
+setnames(data, old = "q112", new = "institutionalized")
+
+data$institutionalized <- trimws(data$institutionalized, "both")
+
+data$instflag <- ifelse(data$institutionalized %in% c("Yes"), 1, 
+       ifelse(data$institutionalized %in% c("No"), 0, 3))
+```
+
+```{r}
+#Accessible Toilet in Home Flag
+
+toiletflag <- rep("NA", nrow(data))
+
+data <- cbind(data, toiletflag)
+
+setnames(data, old = "q1315", new = "toilet")
+
+data$toilet <- trimws(data$toilet, "both")
+
+data$toiletflag <- ifelse(data$toilet %in% c("Yes (accessible)"), 1, 
+       ifelse(data$toilet %in% c("No (not accessible)","Have none"), 0, 3))
+```
+
+```{r}
+#Accessible Recreational facilities flag
+
+recflag <- rep("NA", nrow(data))
+
+data <- cbind(data, recflag)
+
+setnames(data, old = "q1325", new = "rec")
+
+data$rec <- trimws(data$rec, "both")
+
+data$recflag <- ifelse(data$rec %in% c("Yes (accessible)"), 1, 
+       ifelse(data$rec %in% c("No (not accessible)","Have none"), 0, 3))
+```
+
+```{r}
+#Needed and Received Welfare
+
+welflag <- rep("NA", nrow(data))
+
+data <- cbind(data, welflag)
+
+setnames(data, old = c("q11317", "q11337"), new = c("neededw","receivedw"))
+
+data$neededw <- trimws(data$neededw, "both")
+data$receivedw <- trimws(data$receivedw, "both")
+
+data$welflag <- ifelse(data[,"neededw"] %in% c("Yes") & data[,"receivedw"] %in% c("Yes"), 1, 
+       ifelse(data[,"neededw"] %in% c("Yes") & data[,"receivedw"] %in% c("No"), 0, 3))
+```
+
+```{r}
+#Resave as a new file
+
+write.table(data, file = "nepal_household2.csv", sep = ",", row.names = F)
+```
+
+```{r, error = FALSE, warning = FALSE, message = FALSE}
+rm(list = ls())
+```
+
+#Swaziland Disabilities cleaning
+```{r, error = FALSE, }
+#Clean Swaziland Disabilities, Identify Disabilities Correctly
+data <- read.csv("swazi_disabilities.csv")
+```
+
+```{r}
+#Identify Disability
+disflag <- rep("NA", nrow(data))
+
+data <- cbind(data, disflag)
+
+setnames(data, old = c("q4a", "q4b","q4c","q4d","q4e","q4f"), new = c("See", "Hear", "Walk", "Remembering", "Self_care","Communication"))
+
+for(i in c(which( colnames(data) == "See"):which( colnames(data) == "Communication"))) {
+  data[,i] <- trimws(data[,i],"right")
+}
+
+for (i in c(which( colnames(data) == "See"):which( colnames(data) == "Communication"))) {
+  data$disflag <- ifelse(data$disflag == 1, 1, 
+                         ifelse(data[,i] %in% c("a lot", " unable"), 1, 0)
+  )
+}
+```
+
+```{r}
+#Sex Flag
+#1 if female, 0 if male
+sexflag <- rep("NA", nrow(data))
+
+data <- cbind(data,sexflag)
+
+setnames(data, old = "q4", new = "Sex")
+
+data$Sex <- trimws(data$Sex, "right")
+
+data$sexflag <- ifelse(data$Sex == "Female", 1, 0)
+```
+
+```{r}
+#Physical Health Flag
+#1 if good or very good
+#0 if poor
+#2 if not very good
+#3 if unanswered or answered don't know
+
+physhealthflag <- rep("NA", nrow(data))
+
+data <- cbind(data, physhealthflag)
+
+setnames(data, old = "q46", new = "sphyshealth")
+
+data$sphyshealth <- trimws(data$sphyshealth, "right")
+
+data$physhealthflag <- ifelse(data$sphyshealth %in% c("good", "very good"), 1, 
+       ifelse(data$sphyshealth %in% "poor", 0,
+              ifelse(data$sphyshealth %in% "not very good", 2, 3)))
+```
+
+```{r}
+#Mental Health Flag
+#1 if good or very good
+#0 if poor
+#2 if not very good
+#3 if unanswered or answered don't know
+
+menhealthflag <- rep("NA", nrow(data))
+
+data <- cbind(data, menhealthflag)
+
+setnames(data, old = "q47", new = "smenhealth")
+
+data$smenhealth <- trimws(data$smenhealth, "right")
+
+data$menhealthflag <- ifelse(data$smenhealth %in% c("good", "very good"), 1, 
+       ifelse(data$smenhealth %in% "poor", 0,
+              ifelse(data$smenhealth %in% "not very good", 2, 3)))
+```
+
+```{r}
+#Total Health Flag
+#1 if both mental and physical health are good
+#0 if either mental or physical health are bad
+#2 if for fair; defined as no bad, no more than 1 good, and no more than 1 unanswered
+#3 if unanswered/don't know for both
+
+tothealthflag <- rep("NA", nrow(data))
+
+data <- cbind(data, tothealthflag)
+
+#Old Code to create a fair category
+#data$tothealthflag <- ifelse(data$menhealthflag %in% 0 | data$physhealthflag %in% 0, 0,
+#                             ifelse(data$menhealthflag %in% 1 & data$physhealthflag %in% 1, 1,
+#                                    ifelse(data$menhealthflag %in% 3 & data$physhealthflag %in% 3, 3, 2)))
+
+#New code, removal of fair category
+data$tothealthflag <- ifelse(data$menhealthflag %in% c(0,2) | data$physhealthflag %in% c(0,2), 0,
+                             ifelse(data$menhealthflag %in% 1 & data$physhealthflag %in% 1, 1,3))
+```
+
+```{r}
+#Need to bind from Swazi Case file to Swazi Disabilities File
+#Begin by establishing unique identifiers
+#Combination of hid, head, and ind is sufficient
+#Need to clean white space so the lookups will work
+
+data$head <- trimws(data$head, "right")
+data$ind <- trimws(data$ind, "right")
+
+#Replace blanks in head with those in ind
+
+data$head <- ifelse(data$head == "", data$ind, data$head)
+
+#Replace blanks in ind with those in head
+
+data$ind <- ifelse(data$ind == "", data$head, data$ind)
+```
+
+```{r}
+#Load Swazi Case to match incidents with Swazi Disabilities
+
+data1 <- read.csv("swazi_case.csv")
+```
+
+```{r}
+#Perform same blanks replacement as in Swazi Disabilities
+
+#Convert columns to characters so that merge will function properly
+
+data1$head <- as.character(data1$head)
+
+data1$ind <- as.character(data1$ind)
+
+#Replace blanks in head with those in ind
+
+data1$head <- ifelse(data1$head == "", data1$ind, data1$head)
+
+#Replace blanks in ind with those in head
+
+data1$ind <- ifelse(data1$ind == "", data1$head, data1$ind)
+
+#Change names
+
+setnames(data1, old = c("q8","q9","q12","q28e","q29e","q13g1","q13g3"), new = c("genvio","famvio","institutionalized","toilet","rec","neededw","receivedw"))
+```
+
+```{r}
+######Line up Swazi Case and Swazi Disabilities!
+
+data <- merge(data[,c("head","ind","hid")],data1[,c("head","ind","hid","genvio","famvio","institutionalized","toilet","rec","neededw","receivedw")], all.x = TRUE) %>%
+  .[,4:10] %>%
+  cbind(data, .)
+
+```
+
+```{r}
+#General Violence Flag
+#1 if yes
+#0 if no
+#3 if don't know or NA
+
+genvioflag <- rep("NA", nrow(data))
+
+data <- cbind(data, genvioflag)
+
+data$genvio <- trimws(data$genvio,"both")
+
+data$genvioflag <- ifelse(data$genvio %in% "yes", 1, 
+       ifelse(data$genvio %in% "no", 0, 3))
+```
+
+```{r}
+#Family Violence Flag
+#1 if yes
+#0 if no
+#3 if don't know or NA
+
+famvioflag <- rep("NA", nrow(data))
+
+data <- cbind(data, famvioflag)
+
+data$famvio <- trimws(data$famvio,"both")
+
+data$famvioflag <- ifelse(data$famvio %in% "yes", 1, 
+       ifelse(data$famvio %in% "no", 0, 3))
+```
+
+```{r}
+#Correct for yes to Family Violence but no to General violence
+
+data$genvioflag <- ifelse(data$famvioflag == 1, 1, data$genvioflag)
+
+```
+
+```{r}
+#% Voted flag
+#Answer category of Sometimes counted as yes
+
+votedflag <- rep("NA", nrow(data))
+
+data <- cbind(data, votedflag)
+
+setnames(data, old = "q38k", new = "voted")
+
+data$voted <- trimws(data$voted, "both")
+
+data$votedflag <- ifelse(data$voted %in% c("yes", 3), 1, 
+       ifelse(data$voted %in% c("no"), 0, 3))
+```
+
+```{r}
+#Ever been institutionalized flag
+
+instflag <- rep("NA", nrow(data))
+
+data <- cbind(data, instflag)
+
+data$instflag <- ifelse(data$institutionalized %in% c("yes",2), 1, 
+       ifelse(data$institutionalized %in% c("no",1), 0, 3))
+```
+
+```{r}
+#Accessible Toilet in Home Flag
+
+toiletflag <- rep("NA", nrow(data))
+
+data <- cbind(data, toiletflag)
+
+data$toiletflag <- ifelse(data$toilet %in% c("Yes (accessible)",1,"yes","Sim"), 1, 
+       ifelse(data$toilet %in% c("No (not accessible)","Have none",2,"no","Nao"), 0, 
+              ifelse(data$toilet %in% c(3,"Nenhum","have none"),2,3)))
+```
+
+```{r}
+#Accessible Recreational facilities flag
+
+recflag <- rep("NA", nrow(data))
+
+data <- cbind(data, recflag)
+
+data$recflag <- ifelse(data$rec %in% c("accessible","yes","Sim"), 1, 
+       ifelse(data$rec %in% c("not accessible","None available","no","Nao disponivel","Nao"), 0, 3))
+```
+
+```{r}
+#Needed and Received Welfare
+
+welflag <- rep("NA", nrow(data))
+
+data <- cbind(data, welflag)
+
+data$welflag <- ifelse(data[,"neededw"] %in% c("yes",1) & data[,"receivedw"] %in% c("yes",1), 1, 
+       ifelse(data[,"neededw"] %in% c("yes",1) & data[,"receivedw"] %in% c("no",0), 0, 3))
+```
+
+```{r}
+#Resave as a new file
+
+write.table(data, file = "swazi_disabilities2.csv", sep = ",", row.names = F)
+
+write.table(data1, file = "swazi_case2.csv", sep = ",", row.names = F)
+
+```
+
+```{r, error = FALSE, warning = FALSE, message = FALSE}
+rm(list = ls())
+```
+
+#Lesotho Disabilities Cleaning
+```{r, error = FALSE, }
+#Clean Lesotho Disabilities, Identify Disabilities Correctly
+data <- read.csv("lesotho_disabilities.csv")
+```
+
+```{r}
+#Identify Disability
+disflag <- rep("NA", nrow(data))
+
+data <- cbind(data, disflag)
+
+#Want to use an if function to pull the case data and combine it using rbind with the control data; case starts in q4a and control starts in q4a_2
+
+data$q4a <- factor(data$q4a,levels(data$q4a)[c(2,3,1,4)])
+data$q4b <- factor(data$q4b,levels(data$q4b)[c(2,3,1,4)])
+data$q4c <- factor(data$q4c,levels(data$q4c)[c(2,3,1,4)])
+data$q4d <- factor(data$q4d,levels(data$q4d)[c(2,3,1,4)])
+data$q4e <- factor(data$q4e,levels(data$q4e)[c(2,3,1,4)])
+data$q4f <- factor(data$q4f,levels(data$q4f)[c(2,3,1,4)])
+
+collapse_col <- function(a,b,c,d,e,f) {
+  x <- as.data.frame(foreach(i = c(which( colnames(data) == a):which( colnames(data) == b)),
+                             .combine = "cbind") %do% {
+                               assign(sprintf("d_%d", i), data[!is.na(data[[i]]),i], envir = .GlobalEnv)
+                               })
+  colnames(x) <- c(e:f)
+  y <- as.data.frame(foreach(i = c(which( colnames(data) == c):which( colnames(data) == d)),
+                             .combine = "cbind") %do% {
+                               assign(sprintf("d_%d", i), data[!is.na(data[[i]]),i], envir = .GlobalEnv)
+                               })
+  colnames(y) <- c(e:f)
+  rbind(x,y)
+}
+
+temp <- collapse_col("q4a","q4f","q4a_2","q4f_2",1,6)
+
+data <- cbind(data, temp)
+rm(temp, list = ls(pattern = "d_"))
+
+setnames(data, old = c("q4a", "q4b","q4c","q4d","q4e","q4f","q4a_2", "q4b_2","q4c_2","q4d_2","q4e_2","q4f_2", 1:6), new = c("See_d", "Hear_d", "Walk_d", "Remembering_d", "Self_care_d","Communication_d","See_a", "Hear_a", "Walk_a", "Remembering_a", "Self_care_a","Communication_a","See", "Hear", "Walk", "Remembering", "Self_care","Communication"))
+
+for(i in c(which( colnames(data) == "See"):which( colnames(data) == "Communication"))) {
+  data[,i] <- trimws(data[,i],"right")
+}
+
+for (i in c(which( colnames(data) == "See"):which( colnames(data) == "Communication"))) {
+  data$disflag <- ifelse(data$disflag == 1, 1, 
+                         ifelse(data[,i] %in% c("a lot", " unable", 3, 4), 1, 0)
+  )
+}
+```
+
+```{r}
+#Sex Flag
+#1 if female, 0 if male
+sexflag <- rep("NA", nrow(data))
+
+data <- cbind(data,sexflag)
+
+setnames(data, old = "q4", new = "Sex")
+
+data$Sex <- trimws(data$Sex, "right")
+
+data$sexflag <- ifelse(data$Sex == "Female", 1, 0)
+```
+
+```{r}
+#Physical Health Flag
+#1 if good or very good
+#0 if poor
+#2 if not very good
+#3 if unanswered or answered don't know
+
+#Needs same treatment as WG questions; columns are q46 and q17_2 for physical health and q47 and q18_2 for mental health
+
+#Clear out double NAs so formula works
+data$q17_2 <- ifelse(is.na(data$q46),
+                     ifelse(is.na(data$q17_2), 9, data$q17_2),
+                     data$q17_2)
+
+#convert answers to numbers since the first two columns are words and the second two columns are numbers
+data$q46 <- ifelse(data$q46 %in% "poor", 1, 
+       ifelse(data$q46 %in% "not very good", 2,
+              ifelse(data$q46 %in% "good", 3, 
+                     ifelse(data$q46 %in% "very good", 4,
+                            ifelse(data$q46 %in% "don't know", 9, NA)))))
+
+data$q47 <- trimws(data$q47, "right")
+
+data$q47 <- ifelse(data$q47 %in% "poor", 1, 
+       ifelse(data$q47 %in% "not very good", 2,
+              ifelse(data$q47 %in% "good", 3, 
+                     ifelse(data$q47 %in% "very good", 4,
+                            ifelse(data$q47 %in% "don't know", 9, NA)))))
+
+temp <- collapse_col("q46","q47","q17_2","q18_2",1,2)
+
+data <- cbind(data, temp)
+
+rm(i,temp, list = ls(pattern = "d_"))
+
+setnames(data, old = c("q46","q17_2",1), new = c("sphyshealth_d","sphyshealth_a","sphyshealth"))
+
+physhealthflag <- rep("NA", nrow(data))
+
+data <- cbind(data, physhealthflag)
+
+data$physhealthflag <- ifelse(data$sphyshealth %in% c("good", "very good", 3, 4), 1, 
+       ifelse(data$sphyshealth %in% c("poor", 1), 0,
+              ifelse(data$sphyshealth %in% c("not very good", 2), 2, 3)))
+```
+
+```{r}
+#Mental Health Flag
+#1 if good or very good
+#0 if poor
+#2 if not very good
+#3 if unanswered or answered don't know
+
+menhealthflag <- rep("NA", nrow(data))
+
+data <- cbind(data, menhealthflag)
+
+setnames(data, old = c("q47", "q18_2",2), new = c("smenhealth_d","smenhealth_a","smenhealth"))
+
+data$smenhealth <- trimws(data$smenhealth, "right")
+
+data$menhealthflag <- ifelse(data$smenhealth %in% c("good", "very good", 3, 4), 1, 
+       ifelse(data$smenhealth %in% c("poor", 1), 0,
+              ifelse(data$smenhealth %in% c("not very good", 2), 2, 3)))
+```
+
+```{r}
+#Total Health Flag
+#1 if both mental and physical health are good
+#0 if either mental or physical health are bad or not very good
+#3 if unanswered/don't know for both or with neither being bad or not very good
+
+tothealthflag <- rep("NA", nrow(data))
+
+data <- cbind(data, tothealthflag)
+
+#Old Code to create a fair category
+#data$tothealthflag <- ifelse(data$menhealthflag %in% 0 | data$physhealthflag %in% 0, 0,
+#                             ifelse(data$menhealthflag %in% 1 & data$physhealthflag %in% 1, 1,
+#                                    ifelse(data$menhealthflag %in% 3 & data$physhealthflag %in% 3, 3, 2)))
+
+#New code, removal of fair category
+data$tothealthflag <- ifelse(data$menhealthflag %in% c(0,2) | data$physhealthflag %in% c(0,2), 0,
+                             ifelse(data$menhealthflag %in% 1 & data$physhealthflag %in% 1, 1,3))
+```
+
+```{r}
+#General Violence Flag
+#1 if yes
+#0 if no
+#3 if don't know or NA
+
+genvioflag <- rep("NA", nrow(data))
+
+data <- cbind(data, genvioflag)
+
+setnames(data, old = "BeatenGeneral", new = "genvio")
+
+data$genvioflag <- ifelse(data$genvio %in% 1, 1, 
+       ifelse(data$genvio %in% 2, 0, 3))
+```
+
+```{r}
+#Family Violence Flag
+#1 if yes
+#0 if no
+#3 if don't know or NA
+
+famvioflag <- rep("NA", nrow(data))
+
+data <- cbind(data, famvioflag)
+
+setnames(data, old = "BeatenFamily", new = "famvio")
+
+data$famvioflag <- ifelse(data$famvio %in% 1, 1, 
+       ifelse(data$famvio %in% 2, 0, 3))
+```
+
+```{r}
+#Correct for yes to Family Violence but no to General violence
+
+data$genvioflag <- ifelse(data$famvioflag == 1, 1, data$genvioflag)
+
+```
+
+```{r}
+#% Voted flag
+#Answer category of Sometimes counted as yes
+
+votedflag <- rep("NA", nrow(data))
+
+data <- cbind(data, votedflag)
+
+setnames(data, old = "q38k", new = "voted")
+
+data$voted <- trimws(data$voted, "both")
+
+data$votedflag <- ifelse(data$voted %in% c("Yes", 3,"yes"), 1, 
+       ifelse(data$voted %in% c("No","no"), 0, 3))
+```
+
+```{r}
+#Ever been institutionalized flag
+
+instflag <- rep("NA", nrow(data))
+
+data <- cbind(data, instflag)
+
+setnames(data, old = "q12", new = "institutionalized")
+
+data$institutionalized <- trimws(data$institutionalized, "both")
+
+data$instflag <- ifelse(data$institutionalized %in% c("Yes",2,"yes"), 1, 
+       ifelse(data$institutionalized %in% c("No",1,"no"), 0, 3))
+```
+
+```{r}
+#Accessible Toilet in Home Flag
+
+toiletflag <- rep("NA", nrow(data))
+
+data <- cbind(data, toiletflag)
+
+setnames(data, old = "q28e", new = "toilet")
+
+data$toilet <- trimws(data$toilet, "both")
+
+data$toiletflag <- ifelse(data$toilet %in% c("Yes (accessible)",1,"Yes","Sim", "yes"), 1, 
+       ifelse(data$toilet %in% c("No (not accessible)",2,"No","Nao","no"), 0, 
+              ifelse(data$toilet %in% c(3,"Nenhum","Have none","have none"),2,3)))
+```
+
+```{r}
+#Accessible Recreational facilities flag
+
+recflag <- rep("NA", nrow(data))
+
+data <- cbind(data, recflag)
+
+setnames(data, old = "q29e", new = "rec")
+
+data$toilet <- trimws(data$rec, "both")
+
+data$recflag <- ifelse(data$rec %in% c("accessible","Yes","Sim","yes"), 1, 
+       ifelse(data$rec %in% c("not accessible","None available","No","Nao disponivel","Nao","no"), 0, 3))
+```
+
+```{r}
+#Needed and Received Welfare
+
+welflag <- rep("NA", nrow(data))
+
+data <- cbind(data, welflag)
+
+setnames(data, old = c("q13g1", "q13g3"), new = c("neededw","receivedw"))
+
+data$neededw <- trimws(data$neededw, "both")
+data$receivedw <- trimws(data$receivedw, "both")
+
+data$welflag <- ifelse(data[,"neededw"] %in% c("Yes",1,"yes") & data[,"receivedw"] %in% c("Yes",1,"yes"), 1, 
+       ifelse(data[,"neededw"] %in% c("Yes",1,"yes") & data[,"receivedw"] %in% c("No",0,"no"), 0, 3))
+```
+
+```{r}
+#Resave as a new file
+
+write.table(data, file = "lesotho_disabilities2.csv", sep = ",", row.names = F)
+```
+
+```{r, error = FALSE, warning = FALSE, message = FALSE}
+rm(list = ls())
+```
+
+#Mozambique Master cleaning
+```{r, error = FALSE, }
+#Clean Mozambique Disabilities, Identify Disabilities Correctly
+data <- read.csv("mozambique_master.csv")
+```
+
+```{r}
+#Identify Disability
+disflag <- rep("NA", nrow(data))
+
+data <- cbind(data, disflag)
+
+setnames(data, old = c("L13_A", "L13_B","L13_C","L13_D","L13_E","L13_F"), new = c("See", "Hear", "Walk", "Remembering", "Self_care","Communication"))
+
+for(i in c(which( colnames(data) == "See"):which( colnames(data) == "Communication"))) {
+  data[,i] <- trimws(data[,i],"right")
+}
+
+for (i in c(which( colnames(data) == "See"):which( colnames(data) == "Communication"))) {
+  data$disflag <- ifelse(data$disflag == 1, 1, 
+                         ifelse(data[,i] %in% c("Incapaz", "Muita"), 1, 0)
+  )
+}
+```
+
+```{r}
+#Sex Flag
+#1 if female, 0 if male
+sexflag <- rep("NA", nrow(data))
+
+data <- cbind(data,sexflag)
+
+setnames(data, old = "A03", new = "Sex")
+
+data$Sex <- trimws(data$Sex, "right")
+
+data$sexflag <- ifelse(data$Sex == "Feminino", 1, 0)
+```
+
+```{r}
+#Physical Health Flag
+#1 if good or very good
+#0 if poor
+#2 if not very good
+#3 if unanswered or answered don't know
+
+physhealthflag <- rep("NA", nrow(data))
+
+data <- cbind(data, physhealthflag)
+
+setnames(data, old = "P9_3", new = "sphyshealth")
+
+data$sphyshealth <- trimws(data$sphyshealth, "right")
+
+data$physhealthflag <- ifelse(data$sphyshealth %in% c("good", "very good", 3, 4), 1, 
+       ifelse(data$sphyshealth %in% c("poor",1), 0,
+              ifelse(data$sphyshealth %in% c("not very good",2), 2, 3)))
+```
+
+```{r}
+#Mental Health Flag
+#1 if good or very good
+#0 if poor
+#2 if not very good
+#3 if unanswered or answered don't know
+
+menhealthflag <- rep("NA", nrow(data))
+
+data <- cbind(data, menhealthflag)
+
+setnames(data, old = "P9_4", new = "smenhealth")
+
+data$smenhealth <- trimws(data$smenhealth, "right")
+
+data$menhealthflag <- ifelse(data$smenhealth %in% c("good", "very good", 3, 4), 1, 
+       ifelse(data$smenhealth %in% c("poor",1), 0,
+              ifelse(data$smenhealth %in% c("not very good",2), 2, 3)))
+```
+
+```{r}
+#Total Health Flag
+#1 if both mental and physical health are good
+#0 if either mental or physical health are bad
+#2 if for fair; defined as no bad, no more than 1 good, and no more than 1 unanswered
+#3 if unanswered/don't know for both
+
+tothealthflag <- rep("NA", nrow(data))
+
+data <- cbind(data, tothealthflag)
+
+#Old Code to create a fair category
+#data$tothealthflag <- ifelse(data$menhealthflag %in% 0 | data$physhealthflag %in% 0, 0,
+#                             ifelse(data$menhealthflag %in% 1 & data$physhealthflag %in% 1, 1,
+#                                    ifelse(data$menhealthflag %in% 3 & data$physhealthflag %in% 3, 3, 2)))
+
+#New code, removal of fair category
+data$tothealthflag <- ifelse(data$menhealthflag %in% c(0,2) | data$physhealthflag %in% c(0,2), 0,
+                             ifelse(data$menhealthflag %in% 1 & data$physhealthflag %in% 1, 1,3))
+```
+
+```{r}
+#General Violence Flag
+#1 if yes
+#0 if no
+#3 if don't know or NA
+
+genvioflag <- rep("NA", nrow(data))
+
+data <- cbind(data, genvioflag)
+
+setnames(data, old = "F2_8", new = "genvio")
+
+data$genvioflag <- ifelse(data$genvio %in% 1, 1, 
+       ifelse(data$genvio %in% 2, 0, 3))
+```
+
+```{r}
+#No Family Violence Question was asked so create flag with NAs
+
+famvioflag <- rep(3, nrow(data))
+
+data <- cbind(data, famvioflag)
+```
+
+```{r}
+#Ever been institutionalized flag
+
+instflag <- rep("NA", nrow(data))
+
+data <- cbind(data, instflag)
+
+setnames(data, old = "F2_9", new = "institutionalized")
+
+data$instflag <- ifelse(data$institutionalized %in% c("Yes",1), 1, 
+       ifelse(data$institutionalized %in% c("No",2), 0, 3))
+```
+
+```{r}
+#Accessible Toilet in Home Flag
+
+toiletflag <- rep("NA", nrow(data))
+
+data <- cbind(data, toiletflag)
+
+setnames(data, old = "A6_1_E", new = "toilet")
+
+data$toiletflag <- ifelse(data$toilet %in% c("Yes (accessible)",1,"Yes","Sim"), 1, 
+       ifelse(data$toilet %in% c("No (not accessible)","Have none",2,"No","Nao"), 0, 
+              ifelse(data$toilet %in% c(3,"Nenhum"),2,3)))
+```
+
+```{r}
+#Accessible Recreational facilities flag
+
+recflag <- rep("NA", nrow(data))
+
+data <- cbind(data, recflag)
+
+setnames(data, old = "A6_2_E", new = "rec")
+
+data$recflag <- ifelse(data$rec %in% c("accessible","Yes","Sim"), 1, 
+       ifelse(data$rec %in% c("not accessible","None available","No","Nao disponivel","Nao"), 0, 3))
+```
+
+```{r}
+#Needed and Received Welfare
+
+welflag <- rep("NA", nrow(data))
+
+data <- cbind(data, welflag)
+
+setnames(data, old = c("F3_1_G_2", "F3_1_G_3"), new = c("neededw","receivedw"))
+
+data$welflag <- ifelse(data[,"neededw"] %in% c("Yes",1,"Sim") & data[,"receivedw"] %in% c("Yes",1,"Sim"), 1, 
+       ifelse(data[,"neededw"] %in% c("Yes",1,"Sim") & data[,"receivedw"] %in% c("No",0,"Nao"), 0, 3))
+```
+
+```{r}
+#Resave as a new file
+
+write.table(data, file = "mozambique_master2.csv", sep = ",", row.names = F)
+```
+
+```{r, error = FALSE, warning = FALSE, message = FALSE}
+rm(list = ls())
+```
+
+#Zambia Disability Cleaning
+```{r, error = FALSE, }
+#Clean Zambia Disabilities, Identify Disabilities Correctly
+data <- read.csv("zambia_disabilitiesalt.csv")
+```
+
+```{r}
+#Identify Disability
+disflag <- rep("NA", nrow(data))
+
+data <- cbind(data, disflag)
+
+setnames(data, old = c("screen.a", "screen.b","screen.c","screen.d","screen.e","screen.f"), new = c("See", "Hear", "Walk", "Remembering", "Self_care","Communication"))
+
+for(i in c(which( colnames(data) == "See"):which( colnames(data) == "Communication"))) {
+  data[,i] <- trimws(data[,i],"right")
+}
+
+for (i in c(which( colnames(data) == "See"):which( colnames(data) == "Communication"))) {
+  data$disflag <- ifelse(data$disflag == 1, 1, 
+                         ifelse(data[,i] %in% c("A lot", "Unable"), 1, 0)
+  )
+}
+```
+
+```{r}
+#Sex Flag
+#1 if female, 0 if male
+sexflag <- rep("NA", nrow(data))
+
+data <- cbind(data,sexflag)
+
+setnames(data, old = "q3", new = "Sex")
+
+data$Sex <- trimws(data$Sex, "right")
+
+data$sexflag <- ifelse(data$Sex == "Female", 1, 0)
+```
+
+```{r}
+#Physical Health Flag
+#1 if good or very good
+#0 if poor
+#2 if not very good
+#3 if unanswered or answered don't know
+
+physhealthflag <- rep("NA", nrow(data))
+
+data <- cbind(data, physhealthflag)
+
+setnames(data, old = "q9.3", new = "sphyshealth")
+
+data$sphyshealth <- trimws(data$sphyshealth, "right")
+
+data$physhealthflag <- ifelse(data$sphyshealth %in% c("good", "very good", 3, 4), 1, 
+       ifelse(data$sphyshealth %in% c("poor",1), 0,
+              ifelse(data$sphyshealth %in% c("not very good",2), 2, 3)))
+```
+
+```{r}
+#Mental Health Flag
+#1 if good or very good
+#0 if poor
+#2 if not very good
+#3 if unanswered or answered don't know
+
+menhealthflag <- rep("NA", nrow(data))
+
+data <- cbind(data, menhealthflag)
+
+setnames(data, old = "q9.4", new = "smenhealth")
+
+data$smenhealth <- trimws(data$smenhealth, "right")
+
+data$menhealthflag <- ifelse(data$smenhealth %in% c("good", "very good", 3, 4), 1, 
+       ifelse(data$smenhealth %in% c("poor",1), 0,
+              ifelse(data$smenhealth %in% c("not very good",2), 2, 3)))
+```
+
+```{r}
+#Total Health Flag
+#1 if both mental and physical health are good
+#0 if either mental or physical health are bad
+#2 if for fair; defined as no bad, no more than 1 good, and no more than 1 unanswered
+#3 if unanswered/don't know for both
+
+tothealthflag <- rep("NA", nrow(data))
+
+data <- cbind(data, tothealthflag)
+
+#Old Code to create a fair category
+#data$tothealthflag <- ifelse(data$menhealthflag %in% 0 | data$physhealthflag %in% 0, 0,
+#                             ifelse(data$menhealthflag %in% 1 & data$physhealthflag %in% 1, 1,
+#                                    ifelse(data$menhealthflag %in% 3 & data$physhealthflag %in% 3, 3, 2)))
+
+#New code, removal of fair category
+data$tothealthflag <- ifelse(data$menhealthflag %in% c(0,2) | data$physhealthflag %in% c(0,2), 0,
+                             ifelse(data$menhealthflag %in% 1 & data$physhealthflag %in% 1, 1,3))
+```
+
+```{r}
+#General Violence Flag
+#1 if yes
+#0 if no
+#3 if don't know or NA
+
+genvioflag <- rep("NA", nrow(data))
+
+data <- cbind(data, genvioflag)
+
+setnames(data, old = "q2.8", new = "genvio")
+
+data$genvioflag <- ifelse(data$genvio %in% "Yes", 1, 
+       ifelse(data$genvio %in% "No", 0, 3))
+```
+
+```{r}
+#No Family Violence Question was asked so create flag with NAs
+
+famvioflag <- rep(3, nrow(data))
+
+data <- cbind(data, famvioflag)
+```
+
+```{r}
+#Ever been institutionalized flag
+
+instflag <- rep("NA", nrow(data))
+
+data <- cbind(data, instflag)
+
+setnames(data, old = "q2.9", new = "institutionalized")
+
+data$instflag <- ifelse(data$institutionalized %in% c("Yes",2), 1, 
+       ifelse(data$institutionalized %in% c("No",1), 0, 3))
+```
+
+```{r}
+#Accessible Toilet in Home Flag
+
+toiletflag <- rep("NA", nrow(data))
+
+data <- cbind(data, toiletflag)
+
+setnames(data, old = "q6.1e", new = "toilet")
+
+data$toiletflag <- ifelse(data$toilet %in% c("Yes (accessible)",1,"Yes"), 1, 
+       ifelse(data$toilet %in% c("No (not accessible)","Have none",2,3,"No"), 0, 3))
+```
+
+```{r}
+#Accessible Recreational facilities flag
+
+recflag <- rep("NA", nrow(data))
+
+data <- cbind(data, recflag)
+
+setnames(data, old = "q6.2e", new = "rec")
+
+data$recflag <- ifelse(data$rec %in% c("accessible","Yes"), 1, 
+       ifelse(data$rec %in% c("not accessible","None available","No"), 0, 3))
+```
+
+```{r}
+#Needed and Received Welfare
+
+welflag <- rep("NA", nrow(data))
+
+data <- cbind(data, welflag)
+
+setnames(data, old = c("q3.1g.2", "q3.1g.3"), new = c("neededw","receivedw"))
+
+data$welflag <- ifelse(data[,"neededw"] %in% c("Yes",1) & data[,"receivedw"] %in% c("Yes",1), 1, 
+       ifelse(data[,"neededw"] %in% c("Yes",1) & data[,"receivedw"] %in% c("No",0), 0, 3))
+```
+
+```{r}
+#Resave as a new file
+
+write.table(data, file = "zambia_disabilities2.csv", sep = ",", row.names = F)
+```
+
+```{r, error = FALSE, warning = FALSE, message = FALSE}
+rm(list = ls())
+```
+
+#Malawi Disability Cleaning
+```{r, error = FALSE, }
+#Clean Malawi Disabilities, Identify Disabilities Correctly
+data <- read.csv("malawi_household.csv")
+```
+
+```{r}
+#Identify Disability
+disflag <- rep("NA", nrow(data))
+
+data <- cbind(data, disflag)
+
+#Not Washington Group so use identified screen
+
+setnames(data, old = "hh_type", new = "screen")
+
+data$disflag <- ifelse(data$screen == "Case", 1, 0)
+```
+
+```{r}
+#Sex Flag
+#1 if female, 0 if male
+sexflag <- rep("NA", nrow(data))
+
+data <- cbind(data,sexflag)
+
+setnames(data, old = "q3", new = "Sex")
+
+data$sexflag <- ifelse(data$Sex == "Female", 1, 0)
+```
+
+```{r}
+#Physical Health Flag
+#1 if good or very good
+#0 if poor
+#2 if not very good
+#3 if unanswered or answered don't know
+
+physhealthflag <- rep("NA", nrow(data))
+
+data <- cbind(data, physhealthflag)
+
+setnames(data, old = "q9.3", new = "sphyshealth")
+
+data$sphyshealth <- trimws(data$sphyshealth, "right")
+
+data$physhealthflag <- ifelse(data$sphyshealth %in% c("good", "very good", 3, 4), 1, 
+       ifelse(data$sphyshealth %in% c("poor",1), 0,
+              ifelse(data$sphyshealth %in% c("not very good",2), 2, 3)))
+```
+
+```{r}
+#Mental Health Flag
+#1 if good or very good
+#0 if poor
+#2 if not very good
+#3 if unanswered or answered don't know
+
+menhealthflag <- rep("NA", nrow(data))
+
+data <- cbind(data, menhealthflag)
+
+setnames(data, old = "q9.4", new = "smenhealth")
+
+data$smenhealth <- trimws(data$smenhealth, "right")
+
+data$menhealthflag <- ifelse(data$smenhealth %in% c("good", "very good", 3, 4), 1, 
+       ifelse(data$smenhealth %in% c("poor",1), 0,
+              ifelse(data$smenhealth %in% c("not very good",2), 2, 3)))
+```
+
+```{r}
+#Total Health Flag
+#1 if both mental and physical health are good
+#0 if either mental or physical health are bad
+#2 if for fair; defined as no bad, no more than 1 good, and no more than 1 unanswered
+#3 if unanswered/don't know for both
+
+tothealthflag <- rep("NA", nrow(data))
+
+data <- cbind(data, tothealthflag)
+
+#Old Code to create a fair category
+#data$tothealthflag <- ifelse(data$menhealthflag %in% 0 | data$physhealthflag %in% 0, 0,
+#                             ifelse(data$menhealthflag %in% 1 & data$physhealthflag %in% 1, 1,
+#                                    ifelse(data$menhealthflag %in% 3 & data$physhealthflag %in% 3, 3, 2)))
+
+#New code, removal of fair category
+data$tothealthflag <- ifelse(data$menhealthflag %in% c(0,2) | data$physhealthflag %in% c(0,2), 0,
+                             ifelse(data$menhealthflag %in% 1 & data$physhealthflag %in% 1, 1,3))
+```
+
+```{r}
+#General Violence Flag
+#1 if yes
+#0 if no
+#3 if don't know or NA
+
+genvioflag <- rep("NA", nrow(data))
+
+data <- cbind(data, genvioflag)
+
+setnames(data, old = "q2.6", new = "genvio")
+
+data$genvioflag <- ifelse(data$genvio %in% 1, 1, 
+       ifelse(data$genvio %in% 2, 0, 3))
+```
+
+```{r}
+#No Family Violence Question was asked so create flag with NAs
+
+famvioflag <- rep(3, nrow(data))
+
+data <- cbind(data, famvioflag)
+```
+
+```{r}
+#Ever been institutionalized flag
+
+instflag <- rep("NA", nrow(data))
+
+data <- cbind(data, instflag)
+
+setnames(data, old = "q2.7", new = "institutionalized")
+
+data$instflag <- ifelse(data$institutionalized %in% c("Yes",1), 1, 
+       ifelse(data$institutionalized %in% c("No",2), 0, 3))
+```
+
+```{r}
+#Accessible Toilet in Home Flag
+
+toiletflag <- rep("NA", nrow(data))
+
+data <- cbind(data, toiletflag)
+
+setnames(data, old = "q6.1e", new = "toilet")
+
+data$toiletflag <- ifelse(data$toilet %in% c("Yes (accessible)",1), 1, 
+       ifelse(data$toilet %in% c("No (not accessible)","Have none",2,3), 0, 3))
+```
+
+```{r}
+#Accessible Recreational facilities flag
+
+recflag <- rep("NA", nrow(data))
+
+data <- cbind(data, recflag)
+
+setnames(data, old = "q6.2e", new = "rec")
+
+data$recflag <- ifelse(data$rec %in% c("accessible"), 1, 
+       ifelse(data$rec %in% c("not accessible","none available"), 0, 3))
+```
+
+```{r}
+#Needed and Received Welfare
+
+welflag <- rep("NA", nrow(data))
+
+data <- cbind(data, welflag)
+
+setnames(data, old = c("q3.1g.2", "q3.1g.3"), new = c("neededw","receivedw"))
+
+data$welflag <- ifelse(data[,"neededw"] %in% c("Yes",1) & data[,"receivedw"] %in% c("Yes",1), 1, 
+       ifelse(data[,"neededw"] %in% c("Yes",1) & data[,"receivedw"] %in% c("No",0), 0, 3))
+```
+
+```{r}
+#Resave as a new file
+
+write.table(data, file = "malawi_household2.csv", sep = ",", row.names = F)
+```
+
+```{r, error = FALSE, warning = FALSE, message = FALSE}
+rm(list = ls())
+```
+

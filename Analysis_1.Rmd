@@ -1,0 +1,214 @@
+---
+title: "First Pass Analysis"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+```{r, echo = FALSE, message = FALSE, warning = FALSE, error = FALSE}
+rm(list = ls())
+```
+
+```{r, echo = FALSE, message = FALSE, warning = FALSE}
+library(readr)
+library(dplyr)
+library(ggplot2)
+library(reshape2)
+library(nnet)
+library(devtools)
+library(countrycode)
+library(Amelia)
+library(expss)
+library(kableExtra)
+library(knitr)
+library(mlogit)
+library(MASS)
+library(foreign)
+library(stargazer)
+library(lmtest)
+library(arm)
+library(Hmisc)
+library(corrplot)
+library(AER)
+library(cowplot)
+library(PerformanceAnalytics)
+library(Zelig)
+library(car)
+library(lmtest)
+library(psych)
+library(magicfor)
+library(foreach)
+library(iterators)
+```
+
+#Botswana
+```{r}
+#Load Botswana
+data <- read.csv("botswana_household2.csv")
+```
+
+```{r, results = FALSE, eval = FALSE}
+#Summary Stats for Physical health
+
+filter(data, disflag == 0 & sexflag == 0 & physhealthflag == 0)
+
+x <- data%>%
+  filter(disflag == 0 & sexflag == 0 & physhealthflag == 0) %>%
+  summarise(length(disflag))
+
+for (i in 0:1) {
+      data%>%
+        filter(disflag == i) %>%
+        dplyr::select(disflag) %>%
+        summarise(length(disflag))%>%print()
+        print(i)
+}
+
+```
+
+
+```{r}
+#Simple Test Case
+count_matches <- function(x) {
+  data%>%
+        filter(disflag == x) %>%
+        dplyr::select(disflag) %>%
+        summarise(length(disflag))
+}
+
+testresults <- foreach(i = 0:1, .combine = data.frame) %do% {
+  count_matches(i)
+}
+
+testresults
+
+rm(testresults)
+
+```
+
+
+#Botswana
+```{r}
+#Generate Baseline Data set
+
+#Function to calculate observations
+count_matches <- function(x, y, z) {
+  data%>%
+        filter(disflag == x & sexflag == y & physhealthflag == z) %>%
+        dplyr::select(disflag) %>%
+        summarise(length(disflag))
+}
+
+#Record observations of each combination
+results <- foreach(i = rep(c(1,1,0,0),3), j = rep(c(0,1),6), z = c(rep(1,4),rep(2,4),rep(0,4)), .combine = 'rbind')%do% {
+  count_matches(i,j,z)
+}
+
+results <- as.data.frame(cbind(results[1:4,1],results[5:8,1],results[9:12,1]))
+colnames(results) <- c("good","fair","poor")
+
+#Total and subtotal individuals w & w/o disabilities
+iwdtot <- c(sum(results[1:2,1]), sum(results[1:2,2]), sum(results[1:2,3]))
+iwodtot <- c(sum(results[3:4,1]), sum(results[3:4,2]), sum(results[3:4,3]))
+total <- c(sum(results$good),sum(results$fair),sum(results$poor))
+
+results <- rbind(results, iwdtot, iwodtot, total)
+
+rm(iwdtot, iwodtot, total)
+
+#Generate percentages
+results$fpercent <- results$fair/sum_row(results$good,results$poor,results$fair)
+results$ppercent <- results$poor/sum_row(results$good,results$poor,results$fair)
+```
+
+```{r}
+#Generate Confidence intervals
+#Define functions for upper, lower, and both
+u95conint <- function(x,y,z) {
+  x + y * sqrt((x*(1-x))/z)
+}
+
+l95conint <- function(x,y,z) {
+  x - y * sqrt((x*(1-x))/z)
+}
+
+conint <- function(x, y, z) {
+   u <- x + y * sqrt((x*(1-x))/z)
+   l <- x - y * sqrt((x*(1-x))/z)
+   ci <- cbind(l,u)
+   return(ci)
+}
+
+#Generate the results from above functions, bind to original results and reorder
+fci <- foreach(i = results[,4], j = rep(1.96, nrow(results)), k = rowSums(results[,1:3]), .combine = 'rbind') %do% {
+  conint(i,j,k)
+}
+colnames(fci) <- c("flower95", "fupper95")
+
+pci <- foreach(i = results[,5], j = rep(1.96, nrow(results)), k = rowSums(results[,1:3]), .combine = 'rbind') %do% {
+  conint(i,j,k)
+}
+colnames(pci) <- c("plower95", "pupper95")
+
+results <- cbind(results,fci,pci)
+
+results <- results[c(1:3,6,4,7,8,5,9)]
+```
+
+
+```{r, error = FALSE, warning = FALSE}
+#Chi Square Tests for Differences
+
+#Chi Square for Total and for disabilities
+totalchi <- chisq.test(results[1:4,1:3], correct = FALSE)
+dischi <- chisq.test(results[5:6,1:3], correct = FALSE)
+
+#Function for Chi Square for gender - can be repurposed for any combination of observations needing to be summed
+chisqr2 <- function(x,y,z,t,q) {
+  a <- colSums(results[c(x,y),q])
+  s <- colSums(results[c(z,t),q])
+  d <- rbind(a,s)
+  df <- chisq.test(d, correct = FALSE)
+  return(df)
+  rm(a,s,d)
+}
+genderchi <- chisqr2(1,3,2,4,1:3)
+
+chitest <- function(x, y) {
+  chisq.test(results[c(x,y),1:3], correct = FALSE)
+}
+
+x <- combn(1:4,2)
+
+chiresults <- foreach(i = x[1,], j = x[2,], .combine = 'rbind') %do% {
+  chitest(i,j)$p.value
+  }
+```
+
+```{r}
+#Add a Group Name and Total, Reorder Variables, Save Country Results
+
+results$group <- c("mwd","wwd","mwod","wwod","iwdtot","iwodtot","total")
+
+results$grouptot <- rowSums(results[,1:3])
+
+results <- results[c(10:11,1:9)]
+
+botresults <- results
+
+#Add a Group Name, Reorder Variables, Save Country Chi
+botchi <- rbind(chiresults,dischi$p.value,genderchi$p.value,totalchi$p.value)
+colnames(botchi) <- c("P-Values")
+comparison <- c("MwD vs WwD", "MwD vs MwoD","MwD vs WwoD","WwD vs MwoD","WwD vs WwoD", "MwoD vs WwoD", "wD vs woD", "Men vs Women", "All Four")
+rownames(botchi) <- c(1: nrow(botchi))
+
+botchi <- as.data.frame(cbind(botchi,comparison))
+botchi <- botchi[c(2,1)]
+
+#Remove Extraneous Information to move to next country
+rm(list = setdiff(ls(),c("botresults", "botchi")))
+```
+
